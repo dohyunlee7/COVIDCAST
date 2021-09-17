@@ -1,0 +1,106 @@
+---
+title: "Lab05 Write-Up"
+author: "Dohyun Leee"
+output: 
+  pdf_document: 
+    highlight: pygments
+    dev: cairo_pdf
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(patchwork)
+```
+
+
+# Part 1: COVIDCAST Data
+
+```{r}
+covid = read_csv("covid_data.csv")
+covid
+```
+
+```{r}
+covid %>%
+  group_by(geo_value, signal) %>%
+  summarize(
+    avg = mean(value, na.rm = T)
+  ) %>%
+  pivot_wider(id_cols = geo_value, names_from = signal, values_from = avg) %>%
+  ungroup() -> state_avg
+state_avg
+```
+
+```{r}
+state_avg %>%
+  select(-geo_value) %>%
+  rename_all(funs(stringr::str_replace(., "smoothed_", ""))) %>%
+  GGally::ggpairs()
+```
+
+```{r}
+state_avg %>%
+  mutate(state = str_to_upper(geo_value)) %>%
+  ggplot(aes(x = smoothed_wearing_mask, y = smoothed_cli)) +
+  geom_text(aes(label = geo_value)) +
+  stat_smooth(method = "lm", se = FALSE) +
+  labs(title = "% of People wearing Masks who had Covid-Like Symptoms",
+       x = "% of People Wearing a Mask",
+       y = "% of People with Covid-Like Symptoms") +
+  theme(panel.background = element_blank())
+  
+```
+
+```{r}
+lm_mod = lm(smoothed_cli ~ smoothed_wearing_mask, data = state_avg)
+
+lm_res = augment(lm_mod, interval = "prediction") 
+p1 = ggplot(lm_res, aes(x = smoothed_wearing_mask, y = .resid)) +
+  geom_point()
+
+p2 = ggplot(lm_res, aes(x = .resid)) + 
+  geom_histogram(bins = 15)
+
+p3 = ggplot(lm_res, aes(x = .fitted, y = .resid)) +
+  geom_point()
+
+p1 + p2 + p3
+```
+
+LINE: Linearity, Independence, Normal Residuals, Equal Variance
+
+Linearity: We can check the original scatterplot and see if there
+is a linear trend among the points
+
+Independence: We can check by plotting an indicator variable
+against the residuals and there shouldn't be any noticeable trend 
+for it to meet the assumption. You can also think about the
+context of the data.
+
+Normal Residuals: We can look at the QQ plot of the residuals and if it follows a Normal Distribution, then we are good to go
+
+Equal Variance: We can check by looking at the residuals plot and
+if there isn't a trend among the points, then the assumption
+is met
+
+```{r}
+tidy_data <- tidy(lm_mod, conf.int = TRUE)
+
+ggplot(data = tidy_data, aes(term,estimate)) +
+  geom_pointrange(aes(ymin = conf.low, ymax = conf.high))+
+  labs(title = "Coefficients of a linear regression model",x="OLS Estimates",y="Term")+
+  coord_flip()+
+  theme_minimal()+
+  theme(plot.title.position = "plot")
+```
+
+# Part 2: Multiple Regression Tutorial
+
+![](/Users/Dohyun/Desktop/school stuff/year3/stat41/lab05/Screen Shot 2021-01-11 at 11.04.06 AM)
+
+![](/Users/Dohyun/Desktop/school stuff/year3/stat41/lab05/Screen Shot 2021-01-11 at 11.12.05 AM)
